@@ -171,6 +171,115 @@ def test_session_transactions(app, client):
             assert sess["foo"] == [42]
 
 
+def test_request_defaults_apply_to_requests(app, client):
+    @app.route("/")
+    def index():
+        return {
+            "url": flask.request.url,
+            "remote_addr": flask.request.remote_addr,
+            "user_agent": flask.request.user_agent.string,
+            "header": flask.request.headers["X-Request-ID"],
+        }
+
+    client.set_request_defaults(
+        base_url="https://example.test/base",
+        headers={"User-Agent": "Default Agent", "X-Request-ID": "default"},
+        environ_base={"REMOTE_ADDR": "192.168.0.10"},
+    )
+
+    rv = client.get("/")
+    assert rv.json == {
+        "url": "https://example.test/base/",
+        "remote_addr": "192.168.0.10",
+        "user_agent": "Default Agent",
+        "header": "default",
+    }
+
+
+def test_request_defaults_can_be_overridden(app, client):
+    @app.route("/")
+    def index():
+        return {
+            "url": flask.request.url,
+            "remote_addr": flask.request.remote_addr,
+            "user_agent": flask.request.user_agent.string,
+            "header": flask.request.headers["X-Request-ID"],
+        }
+
+    client.set_request_defaults(
+        base_url="https://example.test/base",
+        headers={"User-Agent": "Default Agent", "X-Request-ID": "default"},
+        environ_base={"REMOTE_ADDR": "192.168.0.10"},
+    )
+
+    rv = client.get(
+        "/",
+        base_url="https://override.test/root",
+        headers={"User-Agent": "Override Agent", "X-Request-ID": "override"},
+        environ_base={"REMOTE_ADDR": "10.0.0.1"},
+    )
+    assert rv.json == {
+        "url": "https://override.test/root/",
+        "remote_addr": "10.0.0.1",
+        "user_agent": "Override Agent",
+        "header": "override",
+    }
+
+
+def test_session_transaction_uses_request_defaults(app, client):
+    app.secret_key = "test"
+
+    @app.route("/")
+    def index():
+        return {
+            "session": flask.session["foo"],
+            "url": flask.request.url,
+            "remote_addr": flask.request.remote_addr,
+            "header": flask.request.headers["X-Request-ID"],
+        }
+
+    client.set_request_defaults(
+        base_url="https://example.test/base",
+        headers={"X-Request-ID": "default"},
+        environ_base={"REMOTE_ADDR": "192.168.0.10"},
+    )
+
+    with client.session_transaction() as sess:
+        sess["foo"] = "bar"
+
+    rv = client.get("/")
+    assert rv.json == {
+        "session": "bar",
+        "url": "https://example.test/base/",
+        "remote_addr": "192.168.0.10",
+        "header": "default",
+    }
+
+
+def test_clear_request_defaults_restores_previous_behavior(app, client):
+    @app.route("/")
+    def index():
+        return {
+            "url": flask.request.url,
+            "remote_addr": flask.request.remote_addr,
+            "user_agent": flask.request.user_agent.string,
+        }
+
+    client.set_request_defaults(
+        base_url="https://example.test/base",
+        headers={"User-Agent": "Default Agent"},
+        environ_base={"REMOTE_ADDR": "192.168.0.10"},
+    )
+    client.clear_request_defaults()
+
+    rv = client.get("/")
+    assert rv.json == {
+        "url": "http://localhost/",
+        "remote_addr": "127.0.0.1",
+        "user_agent": f"Werkzeug/{importlib.metadata.version('werkzeug')}",
+    }
+
+
 def test_session_transactions_no_null_sessions():
     app = flask.Flask(__name__)
 

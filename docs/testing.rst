@@ -219,6 +219,26 @@ until the ``with`` block ends.
 
         # session is no longer accessible
 
+If you need to reuse the same base URL, headers, or request environ for
+multiple requests, set default request values once on the client.
+Single requests can still override those values, and
+:meth:`~flask.testing.FlaskClient.clear_request_defaults` restores the
+previous behavior.
+
+.. code-block:: python
+
+    def test_api_requests(client):
+        client.set_request_defaults(
+            base_url="https://api.example.test/v1",
+            headers={"Authorization": "Bearer test-token"},
+            environ_base={"REMOTE_ADDR": "192.168.0.10"},
+        )
+
+        response = client.get("/users")
+        assert response.request.url == "https://api.example.test/v1/users"
+
+        client.clear_request_defaults()
+
 If you want to access or set a value in the session *before* making a
 request, use the client's
 :meth:`~flask.testing.FlaskClient.session_transaction` method in a

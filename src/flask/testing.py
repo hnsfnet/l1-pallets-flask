@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import collections.abc as cabc
 import importlib.metadata
 import typing as t
 from contextlib import contextmanager
@@ -11,6 +12,7 @@ from urllib.parse import urlsplit
 import werkzeug.test
 from click.testing import CliRunner
 from click.testing import Result
+from werkzeug.datastructures import Headers
 from werkzeug.test import Client
 from werkzeug.wrappers import Request as BaseRequest
 
@@ -131,6 +133,61 @@ class FlaskClient(Client):
             "REMOTE_ADDR": "127.0.0.1",
             "HTTP_USER_AGENT": f"Werkzeug/{_get_werkzeug_version()}",
         }
+        self._request_defaults: dict[str, t.Any] = {}
+
+    def set_request_defaults(
+        self,
+        *,
+        base_url: str | None = None,
+        headers: Headers
+        | cabc.Mapping[str, t.Any]
+        | cabc.Iterable[tuple[str, t.Any]]
+        | None = None,
+        environ_base: cabc.Mapping[str, t.Any] | None = None,
+    ) -> None:
+        self._request_defaults = {}
+
+        if base_url is not None:
+            self._request_defaults["base_url"] = base_url
+
+        if headers is not None:
+            self._request_defaults["headers"] = Headers(headers)
+
+        if environ_base is not None:
+            self._request_defaults["environ_base"] = dict(environ_base)
+
+    def clear_request_defaults(self) -> None:
+        self._request_defaults.clear()
+
+    def _copy_request_defaults(self) -> dict[str, t.Any]:
+        defaults = self._request_defaults.copy()
+
+        if "headers" in defaults:
+            defaults["headers"] = Headers(defaults["headers"])
+
+        if "environ_base" in defaults:
+            defaults["environ_base"] = dict(defaults["environ_base"])
+
+        return defaults
+
+    def _merge_request_kwargs(self, kwargs: dict[str, t.Any]) -> dict[str, t.Any]:
+        defaults = self._copy_request_defaults()
+
+        if "base_url" in defaults and "base_url" not in kwargs:
+            kwargs["base_url"] = defaults["base_url"]
+
+        if "headers" in defaults:
+            headers = Headers(defaults["headers"])
+            headers.update(kwargs.get("headers", ()))
+            kwargs["headers"] = headers
+
+        if "environ_base" in defaults:
+            kwargs["environ_base"] = {
+                **defaults["environ_base"],
+                **kwargs.get("environ_base", {}),
+            }
+
+        return kwargs
 
     @contextmanager
     def session_transaction(
@@ -158,6 +215,8 @@ class FlaskClient(Client):
             )
 
         app = self.application
+        kwargs = self._merge_request_kwargs(dict(kwargs))
+        kwargs["environ_base"] = self._copy_environ(kwargs.get("environ_base", {}))
         ctx = app.test_request_context(*args, **kwargs)
         self._add_cookies_to_wsgi(ctx.request.environ)
 
@@ -193,6 +252,7 @@ class FlaskClient(Client):
     def _request_from_builder_args(
         self, args: tuple[t.Any, ...], kwargs: dict[str, t.Any]
     ) -> BaseRequest:
+        kwargs = self._merge_request_kwargs(kwargs)
         kwargs["environ_base"] = self._copy_environ(kwargs.get("environ_base", {}))
         builder = EnvironBuilder(self.application, *args, **kwargs)
 
