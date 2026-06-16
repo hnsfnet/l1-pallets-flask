@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import os
 import typing as t
-from datetime import timedelta
 
+from .app import _coerce_send_file_max_age
+from .app import _get_send_file_max_age_override
+from .app import _sentinel
 from .cli import AppGroup
 from .globals import current_app
 from .helpers import send_from_directory
@@ -69,15 +71,14 @@ class Blueprint(SansioBlueprint):
 
         .. versionadded:: 0.9
         """
-        value = current_app.config["SEND_FILE_MAX_AGE_DEFAULT"]
+        value = _get_send_file_max_age_override(current_app.config, filename)
 
-        if value is None:
-            return None
+        if value is not _sentinel:
+            return t.cast(int | None, value)
 
-        if isinstance(value, timedelta):
-            return int(value.total_seconds())
-
-        return value  # type: ignore[no-any-return]
+        return _coerce_send_file_max_age(
+            current_app.config["SEND_FILE_MAX_AGE_DEFAULT"]
+        )
 
     def send_static_file(self, filename: str) -> Response:
         """The view function used to serve files from

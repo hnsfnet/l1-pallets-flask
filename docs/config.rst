@@ -261,6 +261,29 @@ The following configuration values are used internally by Flask:
 
     Default: ``None``
 
+.. py:data:: SEND_FILE_MAX_AGE_OVERRIDES
+
+    Apply per-file cache control values before falling back to
+    :data:`SEND_FILE_MAX_AGE_DEFAULT`. The value is a mapping of glob
+    patterns to either a :class:`datetime.timedelta`, an ``int`` number
+    of seconds, or ``None``. Matching is case-insensitive and checks both
+    the full static path and the basename.
+
+    This works for application and blueprint static files. Explicit
+    ``max_age`` values passed to :func:`~flask.send_file` or
+    :func:`~flask.send_from_directory` still take precedence.
+
+    .. code-block:: python
+
+        app.config["SEND_FILE_MAX_AGE_OVERRIDES"] = {
+            "*.html": 60,
+            "*.css": 3600,
+            "assets/*.js": 86400,
+            "*.hash.js": 31536000,
+        }
+
+    Default: ``{}``
+
 .. py:data:: TRUSTED_HOSTS
 
     Validate :attr:`.Request.host` and other attributes that use it against
