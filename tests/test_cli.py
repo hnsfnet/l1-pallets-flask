@@ -518,6 +518,60 @@ class TestRoutes:
         assert result.exit_code == 0
         assert "Host" in result.output
 
+    def test_format_json(self, app, invoke):
+        result = invoke(["routes", "--format", "json"])
+        assert result.exit_code == 0
+        import json
+        data = json.loads(result.output)
+        assert isinstance(data, list)
+        assert len(data) >= 2
+        assert any(r["endpoint"] == "static" for r in data)
+        assert any(r["endpoint"] == "yyy_get_post" for r in data)
+
+    def test_filter_endpoint(self, app, invoke):
+        result = invoke(["routes", "--endpoint", "post"])
+        assert result.exit_code == 0
+        assert "aaa_post" in result.output
+        assert "static" not in result.output
+        assert "yyy_get_post" in result.output
+
+    def test_filter_method(self, app, invoke):
+        result = invoke(["routes", "--method", "POST"])
+        assert result.exit_code == 0
+        assert "aaa_post" in result.output
+        assert "static" not in result.output
+        assert "yyy_get_post" in result.output
+
+    def test_filter_case_insensitive_method(self, app, invoke):
+        result = invoke(["routes", "--method", "get"])
+        assert result.exit_code == 0
+        assert "static" in result.output
+        assert "yyy_get_post" in result.output
+        assert "aaa_post" not in result.output
+
+    def test_filter_json_endpoint(self, app, invoke):
+        result = invoke(["routes", "--format", "json", "--endpoint", "get_post"])
+        assert result.exit_code == 0
+        import json
+        data = json.loads(result.output)
+        assert len(data) == 1
+        assert data[0]["endpoint"] == "yyy_get_post"
+
+    def test_filter_json_method(self, app, invoke):
+        result = invoke(["routes", "--format", "json", "--method", "POST"])
+        assert result.exit_code == 0
+        import json
+        data = json.loads(result.output)
+        assert len(data) == 2
+        assert any(r["endpoint"] == "aaa_post" for r in data)
+        assert any(r["endpoint"] == "yyy_get_post" for r in data)
+
+    def test_filter_no_match(self, app, invoke):
+        result = invoke(["routes", "--endpoint", "nonexistent"])
+        assert result.exit_code == 0
+        assert "No routes matched" in result.output
+        assert "Endpoint" not in result.output
+
 
 def dotenv_not_available():
     try:

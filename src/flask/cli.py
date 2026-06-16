@@ -1057,8 +1057,23 @@ def shell_command() -> None:
     ),
 )
 @click.option("--all-methods", is_flag=True, help="Show HEAD and OPTIONS methods.")
+@click.option(
+    "--format",
+    "-f",
+    type=click.Choice(("table", "json")),
+    default="table",
+    help="Output format.",
+)
+@click.option("--endpoint", help="Filter routes by endpoint name.")
+@click.option("--method", help="Filter routes by HTTP method.")
 @with_appcontext
-def routes_command(sort: str, all_methods: bool) -> None:
+def routes_command(
+    sort: str,
+    all_methods: bool,
+    format: str,
+    endpoint: str | None,
+    method: str | None,
+) -> None:
     """Show all registered routes with endpoints and methods."""
     rules = list(current_app.url_map.iter_rules())
 
@@ -1069,12 +1084,53 @@ def routes_command(sort: str, all_methods: bool) -> None:
     ignored_methods = set() if all_methods else {"HEAD", "OPTIONS"}
     host_matching = current_app.url_map.host_matching
     has_domain = any(rule.host if host_matching else rule.subdomain for rule in rules)
-    rows = []
 
+    filtered = []
     for rule in rules:
+        methods = rule.methods or set()
+        visible_methods = sorted(methods - ignored_methods)
+
+        # Filter by endpoint
+        if endpoint and endpoint not in rule.endpoint:
+            continue
+
+        # Filter by method (case-insensitive, handle multiple methods)
+        if method:
+            method_upper = method.upper()
+            if not any(m.upper() == method_upper for m in methods):
+                continue
+
+        filtered.append((rule, visible_methods))
+
+    if not filtered:
+        click.echo("No routes matched the specified criteria.")
+        return
+
+    if format == "json":
+        import json
+
+        routes = []
+        for rule, methods in filtered:
+            route_info = {
+                "endpoint": rule.endpoint,
+                "methods": methods,
+                "rule": rule.rule,
+            }
+            if has_domain:
+                route_info["host" if host_matching else "subdomain"] = (
+                    rule.host if host_matching else rule.subdomain
+                ) or ""
+            routes.append(route_info)
+
+        click.echo(json.dumps(routes, indent=2))
+        return
+
+    # Table format
+    rows = []
+    for rule, methods in filtered:
         row = [
             rule.endpoint,
-            ", ".join(sorted((rule.methods or set()) - ignored_methods)),
+            ", ".join(methods),
         ]
 
         if has_domain:

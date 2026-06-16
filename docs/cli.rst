@@ -132,10 +132,10 @@ Windows.
 
 Open a Shell
 ------------
-
-To explore the data in your application, you can start an interactive Python
-shell with the :func:`shell <cli.shell_command>` command. An application
-context will be active, and the app instance will be imported. ::
+\n
+\n.. _cli-routes:\n
+\nList Routes\n------------\n
+\nThe :func:`routes <cli.routes_command>` command will list all registered routes\nwith their endpoints, methods, and rules.\n\n.. code-block:: console\n\n    $ flask routes\n     Endpoint      Methods           Rule\n    ------------  ----------------  -------------------------\n     static        GET               /static/<path:filename>\n     view_a        GET, POST         /a\n     view_b        GET               /b\n\nFilter routes by endpoint name or HTTP method:\n\n.. code-block:: console\n\n    $ flask routes --endpoint admin\n    $ flask routes --method POST\n\nOutput routes as JSON for scripting:\n\n.. code-block:: console\n\n    $ flask routes --format json > routes.json\n    $ flask routes --endpoint api --format json\n\nThe routes can be sorted by different fields:\n\n.. code-block:: console\n\n    $ flask routes --sort endpoint\n    $ flask routes --sort methods\n    $ flask routes --sort rule\n    $ flask routes --sort match\n\nUse the ``--all-methods`` flag to include automatically registered ``HEAD`` and\n``OPTIONS`` methods:\n\n.. code-block:: console\n\n    $ flask routes --all-methods\n\nIf routes are registered with host matching or subdomains, an additional column\nwill show the host or subdomain:\n\n.. code-block:: console\n\n    $ flask routes\n     Endpoint      Methods           Subdomain  Rule\n    ------------  ----------------  ---------  -------------------------\n     api_status    GET                          /status\n     api_v1        GET, POST         api        /v1/<path:path>\n\nTo explore the data in your application, you can start an interactive Python\nshell with the :func:`shell <cli.shell_command>` command. An application\ncontext will be active, and the app instance will be imported. ::
 
     $ flask shell
     Python 3.10.0 (default, Oct 27 2021, 06:59:51) [GCC 11.1.0] on linux
