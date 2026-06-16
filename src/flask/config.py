@@ -140,6 +140,10 @@ class Config(dict):  # type: ignore[type-arg]
         keys with double underscores (``__``). If an intermediate key
         doesn't exist, it will be initialized to an empty dict.
 
+        If an intermediate key exists but is not a dict (for example, a
+        string or integer), a :exc:`ValueError` is raised. The error message
+        includes the environment variable name to help locate the issue.
+
         :param prefix: Load env vars that start with this prefix,
             separated with an underscore (``_``).
         :param loads: Pass each string value to this function and use
@@ -174,12 +178,21 @@ class Config(dict):  # type: ignore[type-arg]
             *parts, tail = key.split("__")
 
             for part in parts:
+                # If the intermediate value is not a dict, raise an error.
+                if part in current and not isinstance(current[part], dict):
+                    raise ValueError(
+                        f"Cannot set nested key '{key}' because intermediate "
+                        f"key '{part}' is not a dict. Check environment "
+                        f"variable '{prefix + key}'."
+                    )
+
                 # If an intermediate dict does not exist, create it.
                 if part not in current:
                     current[part] = {}
 
                 current = current[part]
 
+            # Set the value, overwriting if necessary (for the tail key only).
             current[tail] = value
 
         return True

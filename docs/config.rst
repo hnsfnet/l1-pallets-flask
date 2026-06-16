@@ -624,6 +624,14 @@ exist on the parent dict will be initialized to an empty dict.
 On Windows, environment variable keys are always uppercase, therefore
 the above example would end up as ``MYAPI__CREDENTIALS__USERNAME``.
 
+When an intermediate key already exists but is not a dictionary (for
+example if it was set to a string or integer previously), Flask will
+raise a :exc:`ValueError` to prevent accidental overwriting. The error
+message includes the conflicting environment variable name and path to
+help you locate the issue. This prevents difficult-to-debug situations
+where configuration gets silently corrupted by conflicting environment
+variables.
+
 For even more config loading features, including merging and
 case-insensitive Windows support, try a dedicated library such as
 Dynaconf_, which includes integration with Flask.

@@ -107,6 +107,62 @@ def test_from_prefixed_env_nested(monkeypatch):
     assert app.config["NEW"] == {"K": "v"}
 
 
+def test_from_prefixed_env_nested_intermediate_not_dict(monkeypatch):
+    """Test that intermediate non-dict values raise an error."""
+    monkeypatch.setenv("FLASK_NESTED__KEY", "value")
+    monkeypatch.setenv("FLASK_NESTED__DEEP__KEY2", "value2")
+
+    app = flask.Flask(__name__)
+    app.config["NESTED"] = "not a dict"
+
+    with pytest.raises(ValueError, match="intermediate key 'NESTED' is not a dict"):
+        app.config.from_prefixed_env()
+
+
+def test_from_prefixed_env_path_conflict_same_prefix(monkeypatch):
+    """Test that conflicting paths in same batch are handled consistently."""
+    # Both set the same intermediate to a string then try to use it as a dict
+    monkeypatch.setenv("FLASK_CONFLICT", "string_value")
+    monkeypatch.setenv("FLASK_CONFLICT__KEY", "value")
+
+    app = flask.Flask(__name__)
+
+    with pytest.raises(ValueError, match="intermediate key 'CONFLICT' is not a dict"):
+        app.config.from_prefixed_env()
+
+
+def test_from_prefixed_env_base_types_still_work(monkeypatch):
+    """Ensure basic types still parse correctly."""
+    monkeypatch.setenv("FLASK_STRING", "value")
+    monkeypatch.setenv("FLASK_BOOL", "true")
+    monkeypatch.setenv("FLASK_INT", "1")
+    monkeypatch.setenv("FLASK_FLOAT", "1.2")
+    monkeypatch.setenv("FLASK_LIST", "[1, 2]")
+    monkeypatch.setenv("FLASK_DICT", '{"k": "v"}')
+
+    app = flask.Flask(__name__)
+    app.config.from_prefixed_env()
+
+    assert app.config["STRING"] == "value"
+    assert app.config["BOOL"] is True
+    assert app.config["INT"] == 1
+    assert app.config["FLOAT"] == 1.2
+    assert app.config["LIST"] == [1, 2]
+    assert app.config["DICT"] == {"k": "v"}
+
+
+def test_from_prefixed_env_partial_conflict(monkeypatch):
+    """Test that conflict is detected even when only part of the path conflicts."""
+    monkeypatch.setenv("FLASK_CONFIG__A", "1")
+    monkeypatch.setenv("FLASK_CONFIG__B__X", "2")
+    monkeypatch.setenv("FLASK_CONFIG__B", "string")  # This conflicts with B being a dict
+
+    app = flask.Flask(__name__)
+
+    with pytest.raises(ValueError, match="intermediate key 'B' is not a dict"):
+        app.config.from_prefixed_env()
+
+
 def test_config_from_mapping():
     app = flask.Flask(__name__)
     app.config.from_mapping({"SECRET_KEY": "config", "TEST_KEY": "foo"})
