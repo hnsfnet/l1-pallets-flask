@@ -173,10 +173,24 @@ class Config(dict):  # type: ignore[type-arg]
             current = self
             *parts, tail = key.split("__")
 
-            for part in parts:
+            for i, part in enumerate(parts):
                 # If an intermediate dict does not exist, create it.
                 if part not in current:
                     current[part] = {}
+                elif not isinstance(current[part], dict):
+                    # An intermediate key already holds a non-dict value, so
+                    # it can't be traversed into. Overwriting it would
+                    # silently discard data and make conflicts between
+                    # variables (or with existing config) hard to track
+                    # down, so fail with a message pointing at the offending
+                    # variable and the conflicting key path.
+                    path = "__".join(parts[: i + 1])
+                    raise ValueError(
+                        f"Could not set nested config key from environment"
+                        f" variable {name!r}: the intermediate key {path!r}"
+                        f" is already set to {current[part]!r}, which is not a"
+                        f" dict and cannot hold nested keys."
+                    )
 
                 current = current[part]
 
