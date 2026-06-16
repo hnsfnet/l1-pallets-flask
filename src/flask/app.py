@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections.abc as cabc
+import fnmatch
 import inspect
 import os
 import sys
@@ -57,9 +58,55 @@ if t.TYPE_CHECKING:  # pragma: no cover
     from _typeshed.wsgi import StartResponse
     from _typeshed.wsgi import WSGIEnvironment
 
-    from .testing import FlaskClient
     from .testing import FlaskCliRunner
+    from .testing import FlaskClient
     from .typing import HeadersValue
+
+
+_sentinel = object()
+
+
+def _coerce_send_file_max_age(value: t.Any) -> int | None:
+    if value is None:
+        return None
+
+    if isinstance(value, timedelta):
+        return int(value.total_seconds())
+
+    return value  # type: ignore[no-any-return]
+
+
+def _get_send_file_max_age_override(
+    config: cabc.Mapping[str, t.Any], filename: str | os.PathLike[str] | None
+) -> int | None | object:
+    if filename is None:
+        return _sentinel
+
+    overrides = config.get("SEND_FILE_MAX_AGE_OVERRIDES")
+
+    if not isinstance(overrides, cabc.Mapping):
+        return _sentinel
+
+    normalized_filename = os.fspath(filename).replace("\\", "/")
+    filename_key = normalized_filename.casefold()
+    basename = os.path.basename(normalized_filename).casefold()
+
+    for pattern, value in overrides.items():
+        if not isinstance(pattern, str):
+            continue
+
+        pattern_key = pattern.strip().casefold()
+
+        if not pattern_key:
+            continue
+
+        if fnmatch.fnmatch(filename_key, pattern_key) or fnmatch.fnmatch(
+            basename, pattern_key
+        ):
+            return _coerce_send_file_max_age(value)
+
+    return _sentinel
+
 
 T_shell_context_processor = t.TypeVar(
     "T_shell_context_processor", bound=ft.ShellContextProcessorCallable
@@ -227,6 +274,7 @@ class Flask(App):
             "MAX_FORM_MEMORY_SIZE": 500_000,
             "MAX_FORM_PARTS": 1_000,
             "SEND_FILE_MAX_AGE_DEFAULT": None,
+            "SEND_FILE_MAX_AGE_OVERRIDES": {},
             "TRAP_BAD_REQUEST_ERRORS": None,
             "TRAP_HTTP_EXCEPTIONS": False,
             "EXPLAIN_TEMPLATE_LOADING": False,
@@ -379,15 +427,12 @@ class Flask(App):
 
         .. versionadded:: 0.9
         """
-        value = self.config["SEND_FILE_MAX_AGE_DEFAULT"]
+        value = _get_send_file_max_age_override(self.config, filename)
 
-        if value is None:
-            return None
+        if value is not _sentinel:
+            return t.cast(int | None, value)
 
-        if isinstance(value, timedelta):
-            return int(value.total_seconds())
-
-        return value  # type: ignore[no-any-return]
+        return _coerce_send_file_max_age(self.config["SEND_FILE_MAX_AGE_DEFAULT"])
 
     def send_static_file(self, filename: str) -> Response:
         """The view function used to serve files from

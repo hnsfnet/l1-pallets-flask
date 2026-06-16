@@ -1,5 +1,6 @@
 import io
 import os
+from datetime import timedelta
 
 import pytest
 import werkzeug.exceptions
@@ -80,6 +81,26 @@ class TestSendfile:
             # Test with direct use of send_file.
             with flask.send_file("static/index.html") as rv:
                 assert rv.cache_control.max_age == 10
+
+    def test_static_file_max_age_overrides(self, app, req_ctx):
+        app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 3600
+        app.config["SEND_FILE_MAX_AGE_OVERRIDES"] = {
+            "*.html": 60,
+            "*.TXT": timedelta(minutes=2),
+            "README": 15,
+        }
+
+        assert app.get_send_file_max_age("INDEX.HTML") == 60
+        assert app.get_send_file_max_age("docs/hello.TXT") == 120
+        assert app.get_send_file_max_age("README") == 15
+        assert app.get_send_file_max_age("unknown.bin") == 3600
+        assert app.get_send_file_max_age(None) == 3600
+
+        with app.send_static_file("index.html") as rv:
+            assert rv.cache_control.max_age == 60
+
+        with flask.send_file("static/index.html", max_age=5) as rv:
+            assert rv.cache_control.max_age == 5
 
     def test_send_from_directory(self, app, req_ctx):
         app.root_path = os.path.join(

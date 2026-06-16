@@ -220,10 +220,31 @@ def test_templates_and_static(test_apps):
         assert flask.render_template("nested/nested.txt") == "I'm nested"
 
 
+def test_blueprint_static_max_age_overrides(test_apps) -> None:
+    from blueprintapp import app as blueprint_app
+
+    blueprint_client = blueprint_app.test_client()
+    blueprint_app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 3600
+    blueprint_app.config["SEND_FILE_MAX_AGE_OVERRIDES"] = {
+        "*.css": 120,
+        "admin/static/test.txt": 45,
+    }
+
+    with blueprint_client.get("/admin/static/css/test.css") as rv:
+        cc = parse_cache_control_header(rv.headers["Cache-Control"])
+        assert cc.max_age == 120
+
+    with blueprint_client.get("/admin/static/test.txt") as rv:
+        cc = parse_cache_control_header(rv.headers["Cache-Control"])
+        assert cc.max_age == 45
+
+
 def test_default_static_max_age(app: flask.Flask) -> None:
     class MyBlueprint(flask.Blueprint):
         def get_send_file_max_age(self, filename):
             return 100
+
+    app.config["SEND_FILE_MAX_AGE_OVERRIDES"] = {"*.html": 15}
 
     blueprint = MyBlueprint(
         "blueprint", __name__, url_prefix="/bp", static_folder="static"
